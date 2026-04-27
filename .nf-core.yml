@@ -1,0 +1,33 @@
+repository_type: pipeline
+nf_core_version: "3.0.0"
+org_path: nf-core
+
+lint:
+  files_unchanged:
+    - .github
+  nextflow_config:
+    - manifest.name
+    - manifest.homePage
+  multiqc_config: false
+
+template:
+  name: germlinecnv
+  author: Bioinformatics
+  description: GATK GermlineCNVCaller pipeline for germline CNV detection
+  org: nf-core
+  version: 1.0.0
+  force: true
+  outdir: results
+  skip_features:
+    - github
+    - github_badges
+    - igenomes
+    - nf_core_configs
+    - code_linters
+    - citations
+    - gitpod
+    - codespaces
+    - multiqc
+    - fastqc
+    - adaptivecard
+    - slackreport

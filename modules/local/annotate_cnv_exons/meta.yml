@@ -1,0 +1,50 @@
+name: "annotate_cnv_exons"
+description: Annotate germline CNV calls with exon-level information using MANE transcripts
+keywords:
+  - cnv
+  - annotation
+  - exon
+  - gatk
+tools:
+  - R:
+      description: R statistical computing language with custom exon annotation script
+      homepage: https://www.r-project.org/
+      licence: ["GPL-2.0-or-later"]
+
+input:
+  - meta:
+      type: map
+      description: Groovy Map containing sample information (e.g. id)
+  - vcf:
+      type: file
+      description: VCF file with CNV segment calls from PostprocessGermlineCNVCalls
+      pattern: "*.vcf{,.gz}"
+  - mane_annotation:
+      type: file
+      description: MANE transcript annotation file with exon coordinates
+  - rscript:
+      type: file
+      description: R script for exon annotation (bin/exon_annotation.R)
+  - genes_list:
+      type: file
+      description: Optional gene list file for filtering annotation results
+
+output:
+  - meta:
+      type: map
+      description: Groovy Map containing sample information (e.g. id)
+  - annotated:
+      type: file
+      description: Annotated CNV results with exon information
+      pattern: "*.txt"
+  - annotated_tsv:
+      type: file
+      description: Annotated CNV results in TSV format (optional)
+      pattern: "*.tsv"
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+
+authors:
+  - "@bioinformatics"

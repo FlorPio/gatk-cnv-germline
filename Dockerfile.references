@@ -1,0 +1,43 @@
+# =============================================================================
+# Docker image: germlinecnv-references:hg38-v2.0
+# 
+# Bundles all reference files needed for the nf-core/germlinecnv pipeline:
+#   - hg38 reference genome (FASTA + index + dictionary)
+#   - Agilent SureSelect v7 BED file
+#   - Panel of Normals (pon_high_quality) model
+#   - Ploidy model
+#   - Processed intervals
+#   - Contig ploidy priors
+#   - Documentation
+#
+# Build with: bash build_references_image.sh
+# =============================================================================
+
+FROM ubuntu:22.04
+
+LABEL maintainer="Bioinformatics Pipeline"
+LABEL description="Reference files for GATK GermlineCNVCaller pipeline (hg38, PoN high quality v2.0)"
+LABEL version="2.0"
+
+# Genome reference
+COPY genome/ /references/genome/
+
+# Capture BED
+COPY bed/ /references/bed/
+
+# Panel of Normals - High Quality (6 samples)
+COPY pon_high_quality/cnv_calls/ /references/pon_high_quality/cnv_calls/
+COPY pon_high_quality/ploidy/ /references/pon_high_quality/ploidy/
+COPY pon_high_quality/intervals/ /references/pon_high_quality/intervals/
+
+# Pipeline assets
+COPY assets/ /references/assets/
+
+# Documentation
+COPY docs/ /references/docs/
+
+# Set default workdir
+WORKDIR /references
+
+# Print contents on run (useful for verification)
+CMD ["find", "/references", "-maxdepth", "3", "-type", "f"]
