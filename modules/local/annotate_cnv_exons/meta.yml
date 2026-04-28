@@ -22,6 +22,10 @@ input:
   - mane_annotation:
       type: file
       description: MANE transcript annotation file with exon coordinates
+  - bed:
+      type: file
+      description: Capture panel BED file used to restrict MANE exons (recommended)
+      pattern: "*.bed"
   - rscript:
       type: file
       description: R script for exon annotation (bin/exon_annotation.R)

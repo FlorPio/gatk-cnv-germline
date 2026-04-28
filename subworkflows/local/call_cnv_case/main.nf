@@ -27,6 +27,7 @@ workflow CALL_CNV_CASE {
     ch_model         // channel: path(model) - PON CNV model directory
     ch_dict          // channel: path(dict) - sequence dictionary
     ch_mane_file     // channel: path(mane_file) - optional MANE transcript file for annotation
+    ch_bed_file      // channel: path(bed) - capture panel BED file (path only, no meta) for annotation
     ch_rscript       // channel: path(rscript) - optional R annotation script
     ch_genes_list    // channel: path(genes_list) - optional gene list file for filtering
 
@@ -117,6 +118,7 @@ workflow CALL_CNV_CASE {
         ANNOTATE_CNV_EXONS (
             GATK4_POSTPROCESSGERMLINECNVCALLS.out.segments,
             ch_mane_file,
+            ch_bed_file,
             ch_rscript,
             ch_genes_list
         )

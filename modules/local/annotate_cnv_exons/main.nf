@@ -7,6 +7,7 @@ process ANNOTATE_CNV_EXONS {
     input:
     tuple val(meta), path(vcf)
     path(mane_annotation)
+    path(bed)
     path(rscript)
     path(genes_list)
 
@@ -21,7 +22,8 @@ process ANNOTATE_CNV_EXONS {
     script:
     def args   = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def genes_arg = genes_list.name != 'NO_FILE' ? "--genes ${genes_list}" : ''
+    def genes_arg = (genes_list && genes_list.name != 'NO_FILE') ? "--genes ${genes_list}" : ''
+    def bed_arg   = (bed && bed.name != 'NO_FILE') ? "--bed ${bed}" : ''
     """
     # Decompress VCF if gzipped
     if [[ "${vcf}" == *.gz ]]; then
@@ -34,6 +36,7 @@ process ANNOTATE_CNV_EXONS {
     Rscript ${rscript} \\
         --vcf \${VCF_INPUT} \\
         --MANE ${mane_annotation} \\
+        ${bed_arg} \\
         ${genes_arg} \\
         ${args}
 

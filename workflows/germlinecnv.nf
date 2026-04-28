@@ -55,6 +55,13 @@ workflow GERMLINECNV {
     ch_bed = params.bed ? Channel.value([ [ id: 'intervals' ], file(params.bed, checkIfExists: true) ]) : Channel.empty()
 
     //
+    // Path-only BED channel (for annotation) so it can be passed as `path(bed)` to processes
+    //
+    ch_bed_path = params.bed ?
+        Channel.fromPath(params.bed, checkIfExists: true).collect() :
+        Channel.value(file("${projectDir}/assets/NO_FILE", checkIfExists: false))
+
+    //
     // Prepare ploidy priors channel
     //
     ch_ploidy_priors = params.ploidy_priors ? 
@@ -117,6 +124,7 @@ workflow GERMLINECNV {
                 ch_model,
                 ch_dict_path,
                 ch_mane_file,
+                ch_bed_path,
                 ch_rscript,
                 ch_genes_list
             )
