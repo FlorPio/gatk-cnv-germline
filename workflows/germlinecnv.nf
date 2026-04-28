@@ -142,69 +142,80 @@ workflow GERMLINECNV {
         ch_model = Channel.fromPath(params.pon_model, checkIfExists: true, type: 'dir').collect()
         ch_ploidy_model = Channel.fromPath(params.ploidy_model, checkIfExists: true, type: 'dir').collect()
 
-        // Check if we need to generate counts or use existing
-        if (params.counts_dir) {
-            // Use existing counts - check multiple naming conventions
-            ch_counts = ch_samplesheet
-                .map { meta, bam, bai ->
-                    // Check all possible naming patterns
-                    def counts_tsv_with_counts = file("${params.counts_dir}/${meta.id}.counts.tsv", checkIfExists: false)
-                    def counts_tsv_simple = file("${params.counts_dir}/${meta.id}.tsv", checkIfExists: false)
-                    def counts_hdf5_with_counts = file("${params.counts_dir}/${meta.id}.counts.hdf5", checkIfExists: false)
-                    def counts_hdf5_simple = file("${params.counts_dir}/${meta.id}.hdf5", checkIfExists: false)
-                    
-                    def counts = null
-                    if (counts_tsv_with_counts.exists()) {
-                        counts = counts_tsv_with_counts
-                    } else if (counts_tsv_simple.exists()) {
-                        counts = counts_tsv_simple
-                    } else if (counts_hdf5_with_counts.exists()) {
-                        counts = counts_hdf5_with_counts
-                    } else if (counts_hdf5_simple.exists()) {
-                        counts = counts_hdf5_simple
-                    } else {
-                        error "ERROR: No counts file found for sample ${meta.id} in ${params.counts_dir}"
-                    }
-                    return [ meta, counts ]
-                }
-            ch_intervals = params.intervals ? Channel.fromPath(params.intervals, checkIfExists: true).collect() : Channel.empty()
-
-        } else {
-            // Generate counts first
-            if (params.intervals) {
-                ch_intervals = Channel.fromPath(params.intervals, checkIfExists: true).collect()
-            } else if (params.bed) {
-                GATK4_BEDTOINTERVALLIST (
-                    ch_bed,
-                    ch_dict
-                )
-                ch_intervals = GATK4_BEDTOINTERVALLIST.out.interval_list
-                    .map { meta, intervals -> intervals }
-                    .collect()
-
-                ch_versions = ch_versions.mix(GATK4_BEDTOINTERVALLIST.out.versions)
-            } else {
-                error "ERROR: For 'case' mode without counts_dir, you must provide --bed or --intervals"
-            }
-
-            // Prepare BAM input with intervals for CollectReadCounts
-            ch_bam_with_intervals = ch_samplesheet
-                .combine(ch_intervals)
-                .map { meta, bam, bai, intervals -> [ meta, bam, bai, intervals ] }
-
-            GATK4_COLLECTREADCOUNTS (
-                ch_bam_with_intervals,
-                ch_fasta,
-                ch_fai,
+        //
+        // Resolve intervals (needed if any sample requires count generation)
+        //
+        if (params.intervals) {
+            ch_intervals = Channel.fromPath(params.intervals, checkIfExists: true).collect()
+        } else if (params.bed) {
+            GATK4_BEDTOINTERVALLIST (
+                ch_bed,
                 ch_dict
             )
-            
-            ch_counts = GATK4_COLLECTREADCOUNTS.out.tsv
-                .mix(GATK4_COLLECTREADCOUNTS.out.hdf5)
-                .filter { meta, file -> file != null }
-            
-            ch_versions = ch_versions.mix(GATK4_COLLECTREADCOUNTS.out.versions)
+            ch_intervals = GATK4_BEDTOINTERVALLIST.out.interval_list
+                .map { meta, intervals -> intervals }
+                .collect()
+            ch_versions = ch_versions.mix(GATK4_BEDTOINTERVALLIST.out.versions)
+        } else {
+            ch_intervals = Channel.empty()
         }
+
+        //
+        // Resolve counts: use existing file from counts_dir if found,
+        // otherwise route the sample to GATK4_COLLECTREADCOUNTS.
+        //
+        def lookupCounts = { meta ->
+            if (!params.counts_dir) return null
+            def candidates = [
+                "${params.counts_dir}/${meta.id}.counts.tsv",
+                "${params.counts_dir}/${meta.id}.tsv",
+                "${params.counts_dir}/${meta.id}.counts.hdf5",
+                "${params.counts_dir}/${meta.id}.hdf5"
+            ]
+            for (p in candidates) {
+                def f = file(p, checkIfExists: false)
+                if (f.exists()) return f
+            }
+            return null
+        }
+
+        ch_samplesheet_branched = ch_samplesheet
+            .map { meta, bam, bai -> [ meta, bam, bai, lookupCounts(meta) ] }
+            .branch { meta, bam, bai, counts ->
+                existing: counts != null
+                    return [ meta, counts ]
+                missing : true
+                    return [ meta, bam, bai ]
+            }
+
+        ch_existing_counts = ch_samplesheet_branched.existing
+        ch_missing_samples = ch_samplesheet_branched.missing
+
+        // Generate counts only for samples missing from counts_dir
+        ch_generated_counts = Channel.empty()
+        ch_missing_with_intervals = ch_missing_samples
+            .combine(ch_intervals)
+            .map { meta, bam, bai, intervals ->
+                if (!intervals) {
+                    error "ERROR: Sample ${meta.id} has no counts in --counts_dir and no --bed/--intervals were provided to generate them."
+                }
+                [ meta, bam, bai, intervals ]
+            }
+
+        GATK4_COLLECTREADCOUNTS (
+            ch_missing_with_intervals,
+            ch_fasta,
+            ch_fai,
+            ch_dict
+        )
+
+        ch_generated_counts = GATK4_COLLECTREADCOUNTS.out.tsv
+            .mix(GATK4_COLLECTREADCOUNTS.out.hdf5)
+            .filter { meta, f -> f != null }
+
+        ch_versions = ch_versions.mix(GATK4_COLLECTREADCOUNTS.out.versions)
+
+        ch_counts = ch_existing_counts.mix(ch_generated_counts)
 
         //
         // SUBWORKFLOW: Call CNVs in CASE mode
