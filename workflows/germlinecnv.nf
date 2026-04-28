@@ -217,6 +217,7 @@ workflow GERMLINECNV {
             ch_model,
             ch_dict_path,
             ch_mane_file,
+            ch_bed_path,
             ch_rscript,
             ch_genes_list
         )
