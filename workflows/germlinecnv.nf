@@ -82,11 +82,11 @@ workflow GERMLINECNV {
 
     //
     // Prepare genes list channel for annotation filtering (optional)
-    // Uses default cancer gene panel from assets if not specified
+    // Default: NO filter (sentinel NO_FILE -> module skips --genes)
     //
-    ch_genes_list = params.genes_list ? 
-        Channel.fromPath(params.genes_list, checkIfExists: true).collect() : 
-        Channel.fromPath("${projectDir}/assets/cancer_genes.txt", checkIfExists: true).collect()
+    ch_genes_list = params.genes_list ?
+        Channel.fromPath(params.genes_list, checkIfExists: true).collect() :
+        Channel.value(file("${projectDir}/assets/NO_FILE", checkIfExists: false))
 
     //
     // WORKFLOW LOGIC BY MODE
