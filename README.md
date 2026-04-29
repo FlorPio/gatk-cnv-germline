@@ -16,13 +16,16 @@ The pipeline is built using [Nextflow](https://www.nextflow.io), a workflow tool
 ![Pipeline Diagram](gCNV.drawio.png)
 
 1. **BedToIntervalList** - Convert BED file to interval list format
-2. **CollectReadCounts** - Collect read counts for each sample
-3. **DetermineGermlineContigPloidy** - Determine contig ploidy for all samples
-4. **AnnotateIntervals** - Annotate intervals with GC content and mappability
-5. **GermlineCNVCaller (COHORT)** - Generate Panel of Normals
-6. **GermlineCNVCaller (CASE)** - Call CNVs per sample using PON
-7. **PostprocessGermlineCNVCalls** - Generate VCFs and copy ratio files
-8. **Annotate CNVs** - Optional annotation with MANE transcripts
+2. **CollectReadCounts** - Collect read counts for each sample (hybrid: reuses files from `--counts_dir` and runs only on missing samples)
+3. **AnnotateIntervals** - Annotate intervals with GC content and mappability
+4. **FilterIntervals** *(optional, `--use_filter_intervals`)* - Drop noisy bins from PON intervals
+5. **DetermineGermlineContigPloidy** - Determine contig ploidy for all samples
+6. **GermlineCNVCaller (COHORT)** - Generate Panel of Normals
+7. **PON manifest** - Write `pon_manifest.json` (FASTA/BED md5, samples used, filter parameters)
+8. **GermlineCNVCaller (CASE)** - Call CNVs per sample using PON
+9. **PostprocessGermlineCNVCalls** - Generate VCFs and copy ratio files
+10. **Validate PON manifest** *(optional, `--pon_manifest`)* - Check that case BED/FASTA match the PON
+11. **Annotate CNVs** - Optional annotation with MANE transcripts, restricted to exons inside the capture BED
 
 ## Quick Start
 
@@ -151,15 +154,37 @@ nextflow run main.nf \
 |-----------|-------------|
 | `--pon_model` | Path to existing PON model directory |
 | `--ploidy_model` | Path to existing ploidy model directory |
-| `--counts_dir` | Path to pre-computed counts (optional) |
-| `--intervals` | Path to existing interval list (optional) |
+| `--counts_dir` | Directory with pre-computed counts. The pipeline auto-detects which samples already have counts (`{id}.hdf5`, `{id}.tsv`, `{id}.counts.hdf5`, `{id}.counts.tsv`) and runs `CollectReadCounts` only for the rest. |
+| `--intervals` | Path to existing interval list (optional, used when generating counts for missing samples) |
+| `--pon_manifest` | Optional `pon_manifest.json` from a previous PON run. If supplied, the case BED and FASTA md5 are verified against the PON. |
+| `--strict_pon_validation` | `true` (default). When `false`, mismatches in the manifest validation only emit a warning instead of aborting. |
+
+#### FilterIntervals parameters
+
+`FilterIntervals` is run during PON generation by default to drop noisy bins. Disable it with `--use_filter_intervals false`.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--use_filter_intervals` | `true` | Enable FilterIntervals during PON generation |
+| `--minimum_gc_content` | `0.1` | Minimum GC content per interval |
+| `--maximum_gc_content` | `0.9` | Maximum GC content per interval |
+| `--minimum_mappability` | `0.9` | Minimum mappability per interval |
+| `--maximum_segmental_dup` | `0.5` | Max segmental duplication content |
+| `--low_count_filter_count_threshold` | `5` | Reads below this are considered low |
+| `--low_count_filter_percentage_of_samples` | `90.0` | % of samples that must be low-count to drop a bin |
+| `--extreme_count_filter_minimum_percentile` | `1.0` | Lower percentile cutoff |
+| `--extreme_count_filter_maximum_percentile` | `99.0` | Upper percentile cutoff |
+| `--extreme_count_filter_percentage_of_samples` | `90.0` | % of samples that must be extreme to drop a bin |
 
 #### Annotation parameters
 
 | Parameter | Description |
 |-----------|-------------|
 | `--mane_file` | Path to MANE transcript file for annotation |
+| `--genes_list` | Optional gene list (one symbol per line). If omitted, **no gene filter** is applied and all CNVs overlapping MANE exons are reported. |
 | `--allosomal_contigs` | Allosomal contigs (default: `chrX`) |
+
+The annotation step uses the capture BED to drop MANE exons that fall outside the panel before overlapping with CNV segments, so exons that were never callable (e.g. CHEK2 ex15 in some panels) are not reported as annotated.
 
 #### Resource parameters
 
@@ -175,18 +200,18 @@ nextflow run main.nf \
 results/
 ├── intervals/
 │   ├── intervals.interval_list
-│   └── annotated_intervals.annotated.tsv
+│   ├── annotated_intervals.tsv
+│   └── filtered_intervals.interval_list      # only if --use_filter_intervals (default)
 ├── counts/
-│   └── *.counts.hdf5
+│   └── *.counts.tsv | *.counts.hdf5
 ├── ploidy/
 │   ├── ploidy-calls/
 │   └── ploidy-model/
-├── pon/
-│   ├── pon-model/
-│   └── pon-calls/
-├── case_calls/
-│   └── {sample}/
-│       └── {sample}-calls/
+├── cnv/                                       # GermlineCNVCaller cohort/case output
+│   └── ...
+├── pon/                                       # PON metadata
+│   ├── pon_manifest.json
+│   └── pon_samples.tsv
 ├── results/
 │   └── {sample}/
 │       ├── {sample}_denoised_copy_ratios.tsv
@@ -194,14 +219,35 @@ results/
 │       └── {sample}_segments.vcf.gz
 ├── annotated/
 │   └── {sample}/
-│       └── {sample}_annotated.tsv
+│       └── {sample}_annotated.txt
 └── pipeline_info/
+    ├── validation_report.txt                  # only if --pon_manifest is given in case mode
     ├── execution_report_*.html
     ├── execution_timeline_*.html
     ├── execution_trace_*.txt
     ├── pipeline_dag_*.svg
     └── software_versions.yml
 ```
+
+### PON manifest
+
+When PON generation runs, the pipeline writes a `pon_manifest.json` under `outdir/pon/` documenting the run:
+
+```json
+{
+  "pipeline_version": "1.0.0",
+  "created_at": "2026-04-29T14:23:11-03:00",
+  "reference":  { "fasta_path": "...", "fasta_md5": "..." },
+  "intervals":  { "bed_path": "...", "bed_md5": "...",
+                  "preprocessed_intervals_md5": "...",
+                  "filtered_intervals_md5": "..." },
+  "filter_intervals": { "enabled": true, "params": { "minimum_gc_content": 0.1, ... } },
+  "samples": [ { "id": "S001", "counts_source": "computed" },
+               { "id": "S002", "counts_source": "reused" } ]
+}
+```
+
+In CASE mode, pass `--pon_manifest /path/to/pon_manifest.json` to verify that the BED and FASTA used for the case match those of the PON. If they differ, the run aborts (or emits a warning when `--strict_pon_validation false`).
 
 ## Pipeline structure
 
@@ -264,20 +310,24 @@ nextflow run main.nf \
 
 ### 2. Process patient samples
 
-Run new patient samples against your established PON:
+Run new patient samples against your established PON. Optionally validate against the PON manifest:
 
 ```bash
 nextflow run main.nf \
     --input patient_batch.csv \
     --mode case \
-    --pon_model /lab/pon_trusight/pon/pon-model \
-    --ploidy_model /lab/pon_trusight/ploidy/ploidy-model \
+    --pon_model /lab/pon_trusight/cnv_calls/cohort-cnv-model/cohort-model \
+    --ploidy_model /lab/pon_trusight/ploidy/cohort-model \
+    --pon_manifest /lab/pon_trusight/pon/pon_manifest.json \
     --fasta /references/hg38.fa \
     --bed /panels/trusight_cancer.bed \
     --mane_file /annotations/MANE.GRCh38.txt \
+    --counts_dir /lab/counts_cache \
     --outdir /results/batch_2024_01 \
     -profile singularity
 ```
+
+Samples already present in `--counts_dir` are reused; missing ones are computed on the fly.
 
 ## Troubleshooting
 

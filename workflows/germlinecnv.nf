@@ -87,7 +87,7 @@ workflow GERMLINECNV {
     //
     ch_genes_list = params.genes_list ?
         Channel.fromPath(params.genes_list, checkIfExists: true).collect() :
-        Channel.value(file("${projectDir}/assets/NO_FILE", checkIfExists: false))
+        Channel.value([])
 
     //
     // WORKFLOW LOGIC BY MODE

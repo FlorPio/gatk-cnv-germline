@@ -22,8 +22,8 @@ process ANNOTATE_CNV_EXONS {
     script:
     def args   = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def genes_arg = (genes_list && genes_list.name != 'NO_FILE') ? "--genes ${genes_list}" : ''
-    def bed_arg   = (bed && bed.name != 'NO_FILE') ? "--bed ${bed}" : ''
+    def genes_arg = genes_list ? "--genes ${genes_list}" : ''
+    def bed_arg   = bed        ? "--bed ${bed}"          : ''
     """
     # Decompress VCF if gzipped
     if [[ "${vcf}" == *.gz ]]; then
