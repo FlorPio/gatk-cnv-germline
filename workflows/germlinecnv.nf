@@ -7,8 +7,9 @@
 //
 // SUBWORKFLOWS
 //
-include { GENERATE_PON    } from '../subworkflows/local/generate_pon/main'
-include { CALL_CNV_CASE   } from '../subworkflows/local/call_cnv_case/main'
+include { GENERATE_PON          } from '../subworkflows/local/generate_pon/main'
+include { CALL_CNV_CASE         } from '../subworkflows/local/call_cnv_case/main'
+include { VALIDATE_PON_MANIFEST } from '../modules/local/validate_pon_manifest/main'
 
 //
 // MODULES - nf-core
@@ -110,7 +111,8 @@ workflow GERMLINECNV {
         ch_model = GENERATE_PON.out.model.map { meta, model -> model }
         ch_ploidy_model = GENERATE_PON.out.ploidy_model.map { meta, model -> model }
         ch_counts = GENERATE_PON.out.counts
-        ch_intervals = GENERATE_PON.out.intervals
+        // Prefer filtered intervals downstream when FilterIntervals was used
+        ch_intervals = GENERATE_PON.out.filtered_intervals
 
         if (params.mode == 'full' || params.run_case_after_pon) {
             //
@@ -141,6 +143,20 @@ workflow GERMLINECNV {
 
         ch_model = Channel.fromPath(params.pon_model, checkIfExists: true, type: 'dir').collect()
         ch_ploidy_model = Channel.fromPath(params.ploidy_model, checkIfExists: true, type: 'dir').collect()
+
+        //
+        // Optional: validate the case BED/FASTA against a PON manifest
+        //
+        if (params.pon_manifest) {
+            ch_pon_manifest = Channel.fromPath(params.pon_manifest, checkIfExists: true)
+            ch_case_bed     = ch_bed.map { meta, b -> b }
+            ch_case_fasta   = ch_fasta.map { meta, f -> f }
+            VALIDATE_PON_MANIFEST (
+                ch_pon_manifest,
+                ch_case_bed,
+                ch_case_fasta
+            )
+        }
 
         //
         // Resolve intervals (needed if any sample requires count generation)
