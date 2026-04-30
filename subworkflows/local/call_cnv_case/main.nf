@@ -50,9 +50,14 @@ workflow CALL_CNV_CASE {
             [ meta, counts, [], [] ]
         }
 
-    // Create ploidy model channel with meta for module compatibility
+    // Create ploidy model channel with meta for module compatibility.
+    // .first() converts the queue channel into a value channel so the same
+    // model is broadcast to every sample in ch_counts. Without this, only the
+    // first sample is processed (queue is consumed once) and the pipeline
+    // silently reports "completed successfully" with most samples missing.
     ch_ploidy_model_with_meta = ch_ploidy_model
         .map { model -> [ [ id: 'ploidy_model' ], model ] }
+        .first()
 
     GATK4_DETERMINEGERMLINECONTIGPLOIDY (
         ch_ploidy_input,
