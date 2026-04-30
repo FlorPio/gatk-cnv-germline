@@ -25,10 +25,10 @@ COPY genome/ /references/genome/
 # Capture BED
 COPY bed/ /references/bed/
 
-# Panel of Normals -
-COPY pon_high_quality/cnv_calls/ /references/pon/cnv_calls/
-COPY pon_high_quality/ploidy/ /references/pon/ploidy/
-COPY pon_high_quality/intervals/ /references/pon/intervals/
+# Panel of Normals
+COPY pon/cnv_calls/ /references/pon/cnv_calls/
+COPY pon/ploidy/    /references/pon/ploidy/
+COPY pon/intervals/ /references/pon/intervals/
 
 # Pipeline assets
 COPY assets/ /references/assets/

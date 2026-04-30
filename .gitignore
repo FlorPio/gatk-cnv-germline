@@ -225,3 +225,9 @@ local.config
 *~
 
 assets/samplesheet_real.csv
+
+# Nextflow run artefacts
+work/
+.nextflow*
+results/
+results_*/

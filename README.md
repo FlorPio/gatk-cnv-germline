@@ -329,6 +329,12 @@ nextflow run main.nf \
 
 Samples already present in `--counts_dir` are reused; missing ones are computed on the fly.
 
+## Bundling references in a Docker image
+
+The repo ships `build_references_image.sh` and `Dockerfile.references` to package the reference genome, capture BED and a generated PoN into a single tagged image (`germlinecnv-references:<tag>`). Useful for shipping a reproducible reference snapshot to other machines or collaborators.
+
+See [`docs/build_references.md`](docs/build_references.md) for the full walkthrough (configuring source paths, building, verifying, using in `--mode case`, versioning).
+
 ## Troubleshooting
 
 ### Common issues
