@@ -159,6 +159,25 @@ nextflow run main.nf \
 | `--pon_manifest` | Optional `pon_manifest.json` from a previous PON run. If supplied, the case BED and FASTA md5 are verified against the PON. |
 | `--strict_pon_validation` | `true` (default). When `false`, mismatches in the manifest validation only emit a warning instead of aborting. |
 
+#### AnnotateIntervals optional tracks
+
+Both are optional but recommended by GATK. If omitted, the corresponding FilterIntervals threshold has no data to act on and effectively does nothing.
+
+| Parameter | Description |
+|-----------|-------------|
+| `--mappability_track` | Path to a single-read mappability BED (e.g. `k100.umap.bed.gz` from the Hoffman lab Bismap resource). May be plain `.bed` or `.bed.gz` (with a `.tbi` next to it). |
+| `--segmental_duplication_track` | Path to a segmental-duplication BED (e.g. `hg38_segdup.bed.gz`). Same format rules as above. |
+
+If you have a `bedgraph` file (e.g. `k100.umap.bedgraph.gz`), convert it to BED first:
+
+```bash
+zcat k100.umap.bedgraph.gz | awk '$4==1 {print $1"\t"$2"\t"$3}' | \
+    sort -k1,1 -k2,2n | bgzip > k100.umap.bed.gz
+tabix -p bed k100.umap.bed.gz
+```
+
+(adjust the `$4==1` threshold to your definition of "mappable".)
+
 #### FilterIntervals parameters
 
 `FilterIntervals` is run during PON generation by default to drop noisy bins. Disable it with `--use_filter_intervals false`.

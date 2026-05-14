@@ -104,18 +104,37 @@ workflow GENERATE_PON {
     //
     // AnnotateIntervals (needed by FilterIntervals and CNVCaller)
     //
+    // Optional tracks: mappability and segmental-duplication (recommended by GATK).
+    // Each track may be plain .bed or bgzipped .bed.gz (then a .tbi must sit next to it).
+    //
     ch_intervals_meta = ch_intervals.map { intervals -> [ [ id: 'intervals' ], intervals ] }
     ch_dummy = Channel.value( [ [ id: 'null' ], [] ] )
+
+    def build_track_channel = { String track_param, String label ->
+        if (!track_param) return [ ch_dummy, ch_dummy ]
+        def f = file(track_param, checkIfExists: true)
+        def tbi_file = file("${track_param}.tbi", checkIfExists: false)
+        def tbi = tbi_file.exists() ? tbi_file : []
+        log.info "AnnotateIntervals: using ${label} track ${f.name}" +
+                 (tbi instanceof List ? " (no .tbi)" : " (+${tbi.name})")
+        return [
+            Channel.value( [ [ id: label ], f   ] ),
+            Channel.value( [ [ id: label ], tbi ] )
+        ]
+    }
+
+    def (ch_mappa, ch_mappa_tbi)   = build_track_channel(params.mappability_track,           'mappability')
+    def (ch_segdup, ch_segdup_tbi) = build_track_channel(params.segmental_duplication_track, 'segdup')
 
     GATK4_ANNOTATEINTERVALS (
         ch_intervals_meta,
         ch_fasta,
         ch_fai,
         ch_dict,
-        ch_dummy,
-        ch_dummy,
-        ch_dummy,
-        ch_dummy
+        ch_mappa,
+        ch_mappa_tbi,
+        ch_segdup,
+        ch_segdup_tbi
     )
 
     ch_annotated = GATK4_ANNOTATEINTERVALS.out.annotated_intervals
