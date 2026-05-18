@@ -159,6 +159,12 @@ nextflow run main.nf \
 | `--pon_manifest` | Optional `pon_manifest.json` from a previous PON run. If supplied, the case BED and FASTA md5 are verified against the PON. |
 | `--strict_pon_validation` | `true` (default). When `false`, mismatches in the manifest validation only emit a warning instead of aborting. |
 
+#### Interval padding
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--bed_padding` | `0` | Bp added to each BED target by `BedToIntervalList`. Increases reads per bin for small exons (e.g. MLH1 ex4-6) and can improve `QS` for short deletions. Changes the intervals → requires regenerating the PON (and counts). |
+
 #### AnnotateIntervals optional tracks
 
 Both are optional but recommended by GATK. If omitted, the corresponding FilterIntervals threshold has no data to act on and effectively does nothing.

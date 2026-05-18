@@ -15,6 +15,7 @@ include { VALIDATE_PON_MANIFEST } from '../modules/local/validate_pon_manifest/m
 // MODULES - nf-core
 //
 include { GATK4_BEDTOINTERVALLIST  } from '../modules/nf-core/gatk4/bedtointervallist/main'
+include { GATK4_PREPROCESSINTERVALS } from '../modules/local/gatk4/preprocessintervals/main'
 include { GATK4_COLLECTREADCOUNTS  } from '../modules/nf-core/gatk4/collectreadcounts/main'
 
 //
@@ -37,6 +38,7 @@ workflow GERMLINECNV {
 
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
+    ch_segments = Channel.empty()
 
     //
     // Prepare reference channels with meta maps (required by nf-core modules)
@@ -131,6 +133,7 @@ workflow GERMLINECNV {
                 ch_genes_list
             )
             ch_versions = ch_versions.mix(CALL_CNV_CASE.out.versions)
+            ch_segments = CALL_CNV_CASE.out.segments
         }
 
     } else if (params.mode == 'case') {
@@ -164,14 +167,19 @@ workflow GERMLINECNV {
         if (params.intervals) {
             ch_intervals = Channel.fromPath(params.intervals, checkIfExists: true).collect()
         } else if (params.bed) {
-            GATK4_BEDTOINTERVALLIST (
-                ch_bed,
-                ch_dict
+            GATK4_BEDTOINTERVALLIST ( ch_bed, ch_dict )
+            GATK4_PREPROCESSINTERVALS (
+                GATK4_BEDTOINTERVALLIST.out.interval_list,
+                ch_fasta,
+                ch_fai,
+                ch_dict,
+                Channel.value( [ [ id: 'null' ], [] ] )
             )
-            ch_intervals = GATK4_BEDTOINTERVALLIST.out.interval_list
+            ch_intervals = GATK4_PREPROCESSINTERVALS.out.interval_list
                 .map { meta, intervals -> intervals }
                 .collect()
             ch_versions = ch_versions.mix(GATK4_BEDTOINTERVALLIST.out.versions)
+            ch_versions = ch_versions.mix(GATK4_PREPROCESSINTERVALS.out.versions)
         } else {
             ch_intervals = Channel.empty()
         }
@@ -249,6 +257,7 @@ workflow GERMLINECNV {
             ch_genes_list
         )
         ch_versions = ch_versions.mix(CALL_CNV_CASE.out.versions)
+        ch_segments = CALL_CNV_CASE.out.segments
 
     } else {
         error "ERROR: Invalid mode '${params.mode}'. Valid modes are: 'pon', 'case', 'full'"
@@ -262,7 +271,7 @@ workflow GERMLINECNV {
     )
 
     emit:
-    segments       = params.mode != 'pon' ? CALL_CNV_CASE.out.segments : Channel.empty()
+    segments       = ch_segments
     multiqc_report = ch_multiqc_files
     versions       = ch_versions
 }

@@ -4,8 +4,8 @@ process PON_MANIFEST {
 
     conda "conda-forge::coreutils=9.1"
     container "${workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container
-        ? 'https://depot.galaxyproject.org/singularity/coreutils:9.1'
-        : 'quay.io/biocontainers/coreutils:9.1'}"
+        ? 'https://depot.galaxyproject.org/singularity/ubuntu:22.04'
+        : 'docker.io/ubuntu:22.04'}"
 
     input:
     val  samples_used        // list of sample IDs
@@ -17,6 +17,7 @@ process PON_MANIFEST {
     val  filter_enabled
     val  pipeline_version
     val  filter_params       // map of filter thresholds (for documentation)
+    val  bed_padding         // BedToIntervalList --PADDING value (0 if disabled)
 
     output:
     path "pon_manifest.json", emit: manifest
@@ -60,6 +61,7 @@ process PON_MANIFEST {
   "intervals": {
     "bed_path": "${bed}",
     "bed_md5": "\${bed_md5}",
+    "bed_padding": ${bed_padding ?: 0},
     "preprocessed_intervals": "${intervals}",
     "preprocessed_intervals_md5": "\${iv_md5}",
     "filtered_intervals": "${filtered_name}",

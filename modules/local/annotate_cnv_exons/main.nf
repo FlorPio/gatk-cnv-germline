@@ -12,9 +12,9 @@ process ANNOTATE_CNV_EXONS {
     path(genes_list)
 
     output:
-    tuple val(meta), path("*.txt"),      emit: annotated
-    tuple val(meta), path("*.tsv"),      emit: annotated_tsv, optional: true
-    path "versions.yml",                 emit: versions
+    tuple val(meta), path("*_annotated.txt"), emit: annotated
+    tuple val(meta), path("*_annotated.tsv"), emit: annotated_tsv, optional: true
+    path "versions.yml",                      emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -40,11 +40,18 @@ process ANNOTATE_CNV_EXONS {
         ${genes_arg} \\
         ${args}
 
-    # Rename output to include sample prefix if needed
-    for f in *.txt; do
-        if [ -f "\$f" ] && [[ "\$f" != "${prefix}"* ]]; then
-            mv "\$f" "${prefix}_annotated.txt" 2>/dev/null || true
-        fi
+    # The R script writes <vcf_basename>_annotated.txt directly. If the
+    # resulting file does not start with the sample prefix, create a
+    # prefixed copy so downstream stages and publishDir get a predictable
+    # name. We deliberately do NOT rename indiscriminately (the previous
+    # version caught the staged MANE input and renamed it to
+    # ${prefix}_annotated.txt, polluting the results).
+    for f in *_annotated.txt; do
+        [ -f "\$f" ] || continue
+        case "\$f" in
+            ${prefix}*) : ;;                                   # already prefixed
+            *)          cp "\$f" "${prefix}_annotated.txt" ;;  # add prefixed alias
+        esac
     done
 
     cat <<-END_VERSIONS > versions.yml

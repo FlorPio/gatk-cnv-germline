@@ -1,6 +1,11 @@
 process CUSTOM_DUMPSOFTWAREVERSIONS {
     label 'process_single'
 
+    // Cosmetic step (just collates software versions). If the image cannot
+    // be pulled (offline / DNS issues) we don't want it to break a full
+    // case-mode run that has already produced VCFs and annotations.
+    errorStrategy = 'ignore'
+
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/multiqc:1.14--pyhdfd78af_0' :

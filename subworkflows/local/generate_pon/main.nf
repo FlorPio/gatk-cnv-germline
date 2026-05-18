@@ -9,6 +9,7 @@
 */
 
 include { GATK4_BEDTOINTERVALLIST             } from '../../../modules/nf-core/gatk4/bedtointervallist/main'
+include { GATK4_PREPROCESSINTERVALS           } from '../../../modules/local/gatk4/preprocessintervals/main'
 include { GATK4_COLLECTREADCOUNTS             } from '../../../modules/nf-core/gatk4/collectreadcounts/main'
 include { GATK4_DETERMINEGERMLINECONTIGPLOIDY } from '../../../modules/nf-core/gatk4/determinegermlinecontigploidy/main'
 include { GATK4_ANNOTATEINTERVALS             } from '../../../modules/nf-core/gatk4/annotateintervals/main'
@@ -31,12 +32,25 @@ workflow GENERATE_PON {
     ch_versions = Channel.empty()
 
     //
-    // BedToIntervalList -> preprocessed intervals
+    // BedToIntervalList -> Picard interval_list (just a format conversion).
+    // PreprocessIntervals -> applies --padding (params.bed_padding) and the
+    // OVERLAPPING_ONLY merging rule. This is the canonical GATK CNV step
+    // and the right place for padding (BedToIntervalList does NOT support
+    // a padding argument).
     //
     GATK4_BEDTOINTERVALLIST ( ch_bed, ch_dict )
     ch_versions = ch_versions.mix(GATK4_BEDTOINTERVALLIST.out.versions.first())
 
-    ch_intervals = GATK4_BEDTOINTERVALLIST.out.interval_list
+    GATK4_PREPROCESSINTERVALS (
+        GATK4_BEDTOINTERVALLIST.out.interval_list,
+        ch_fasta,
+        ch_fai,
+        ch_dict,
+        Channel.value( [ [ id: 'null' ], [] ] )
+    )
+    ch_versions = ch_versions.mix(GATK4_PREPROCESSINTERVALS.out.versions.first())
+
+    ch_intervals = GATK4_PREPROCESSINTERVALS.out.interval_list
         .first()
         .map { meta, intervals -> intervals }
 
@@ -237,7 +251,8 @@ workflow GENERATE_PON {
         ch_manifest_in.map { ids, sources, bed, fasta, iv, fi -> fi },
         params.use_filter_intervals,
         workflow.manifest.version,
-        filter_params_map
+        filter_params_map,
+        params.bed_padding ?: 0
     )
     ch_versions = ch_versions.mix(PON_MANIFEST.out.versions)
 
