@@ -160,7 +160,11 @@ workflow GENERATE_PON {
     if (params.use_filter_intervals) {
         log.info "FilterIntervals ENABLED: noisy bins will be removed from PON intervals."
 
-        ch_filter_input = GATK4_BEDTOINTERVALLIST.out.interval_list.first()
+        // IMPORTANT: feed PreprocessIntervals output (padded), NOT
+        // BedToIntervalList output. The annotated_intervals were built on
+        // the padded set, so coordinates must match — otherwise GATK's
+        // "interval intersection" drops ~99% of bins before any filter.
+        ch_filter_input   = GATK4_PREPROCESSINTERVALS.out.interval_list.first()
         ch_annotated_meta = GATK4_ANNOTATEINTERVALS.out.annotated_intervals.first()
 
         GATK4_FILTERINTERVALS (

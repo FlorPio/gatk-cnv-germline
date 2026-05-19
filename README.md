@@ -174,15 +174,41 @@ Both are optional but recommended by GATK. If omitted, the corresponding FilterI
 | `--mappability_track` | Path to a single-read mappability BED (e.g. `k100.umap.bed.gz` from the Hoffman lab Bismap resource). May be plain `.bed` or `.bed.gz` (with a `.tbi` next to it). |
 | `--segmental_duplication_track` | Path to a segmental-duplication BED (e.g. `hg38_segdup.bed.gz`). Same format rules as above. |
 
-If you have a `bedgraph` file (e.g. `k100.umap.bedgraph.gz`), convert it to BED first:
+If you have a per-base `bedgraph` (e.g. `k100.umap.bedgraph.gz` from Bismap,
+which has 1-bp resolution and ~3 billion lines for hg38), do NOT pass it
+to GATK directly — it will OOM. Filter by score and merge contiguous
+positions into regions first:
 
 ```bash
-zcat k100.umap.bedgraph.gz | awk '$4==1 {print $1"\t"$2"\t"$3}' | \
-    sort -k1,1 -k2,2n | bgzip > k100.umap.bed.gz
+zcat k100.umap.bedgraph.gz \
+  | awk -v OFS='\t' '
+      $4 >= 0.5 {
+        if ($1 == prev_chr && $2 == prev_end) { prev_end = $3 }
+        else {
+          if (prev_chr != "") print prev_chr, prev_start, prev_end
+          prev_chr=$1; prev_start=$2; prev_end=$3
+        }
+      }
+      END { if (prev_chr != "") print prev_chr, prev_start, prev_end }
+    ' \
+  | sort -k1,1 -k2,2n \
+  | bgzip > k100.umap.bed.gz
 tabix -p bed k100.umap.bed.gz
+
+# Sanity checks
+ls -lh k100.umap.bed.gz                       # expect a few MB, not GB
+zcat k100.umap.bed.gz | wc -l                 # expect 500k-2M regions
 ```
 
-(adjust the `$4==1` threshold to your definition of "mappable".)
+The result is a BED3 of regions where k=100 mappability ≥ 0.5. GATK's
+`AnnotateIntervals` computes the fraction of each bin overlapping those
+regions, and `FilterIntervals --minimum-mappability 0.9` keeps bins
+where ≥90 % of the bin is "mappable".
+
+> WARNING: do NOT use `awk '$4==1 {print $1,$2,$3}'` to keep only the
+> perfectly-mappable positions. Most exonic bins straddle boundaries
+> where k=100 mappability is slightly below 1.0; that filter drops
+> ~99 % of bins. Use a fractional cutoff (e.g. 0.5) and merge.
 
 #### FilterIntervals parameters
 

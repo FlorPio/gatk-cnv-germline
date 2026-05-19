@@ -1,10 +1,11 @@
 process CUSTOM_DUMPSOFTWAREVERSIONS {
     label 'process_single'
 
-    // Cosmetic step (just collates software versions). If the image cannot
-    // be pulled (offline / DNS issues) we don't want it to break a full
-    // case-mode run that has already produced VCFs and annotations.
-    errorStrategy = 'ignore'
+    // Cosmetic step (just collates software versions). If anything goes
+    // wrong here (image pull, YAML parse on a malformed versions file,
+    // etc.) we don't want it to break a full run that has already
+    // produced VCFs / model / manifest.
+    errorStrategy 'ignore'
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
